@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Case of Dr. He: A Visual Novel</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Use Inter font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Dark background */
+        }
+        /* Custom styles for the visual novel */
+        #game-container {
+            width: 100%;
+            max-width: 900px;
+            height: 600px;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            border: 2px solid #374151;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+        #character-display {
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            transition: background-image 0.5s ease-in-out;
+        }
+        #character-portrait {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            height: 550px;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+        }
+        #dialogue-box {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(17, 24, 39, 0.9); /* Dark semi-transparent */
+            border: 2px solid #4B5563;
+            border-radius: 10px;
+            padding: 20px;
+            color: #F9FAFB;
+            box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.3);
+        }
+        #character-name {
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: #E5E7EB;
+            margin-bottom: 8px;
+        }
+        #dialogue-text {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            min-height: 60px; /* To prevent layout shift */
+        }
+        #choice-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 20;
+        }
+        .choice-btn {
+            background-color: #374151;
+            color: #F9FAFB;
+            border: 2px solid #6B7280;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            min-width: 300px;
+            text-align: center;
+        }
+        .choice-btn:hover {
+            background-color: #4B5563;
+            border-color: #9CA3AF;
+            transform: translateY(-2px);
+        }
+        /* Click to continue prompt */
+        #click-prompt {
+            position: absolute;
+            bottom: 10px;
+            right: 20px;
+            font-size: 0.9rem;
+            color: #9CA3AF;
+            animation: bounce 1s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        /* Hide elements helper */
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 flex items-center justify-center min-h-screen p-4">
+
+    <div id="game-container" class="bg-gray-800">
+        <!-- Background for the scene -->
+        <div id="character-display" style="background-image: url('https://placehold.co/900x600/374151/1F2937?text=Courtroom');">
+            <!-- Character Portrait -->
+            <img id="character-portrait" src="https://placehold.co/400x550/9CA3AF/FFFFFF?text=?" alt="Character Portrait" class="opacity-0">
+        </div>
+
+        <!-- Dialogue Box -->
+        <div id="dialogue-box">
+            <div id="character-name">Narrator</div>
+            <p id="dialogue-text">The courtroom is silent. You sit at the defense table next to your colleague, the Lead Defense Attorney. Dr. He Jiankui sits beside you, staring straight ahead.</p>
+            <div id="click-prompt">Click to continue...</div>
+        </div>
+
+        <!-- Choice Buttons -->
+        <div id="choice-container" class="hidden">
+            <!-- Choices will be dynamically added here -->
+        </div>
+    </div>
+
+    <script>
+        // Get DOM elements
+        const gameContainer = document.getElementById('game-container');
+        const characterDisplay = document.getElementById('character-display');
+        const characterPortrait = document.getElementById('character-portrait');
+        const dialogueBox = document.getElementById('dialogue-box');
+        const characterName = document.getElementById('character-name');
+        const dialogueText = document.getElementById('dialogue-text');
+        const choiceContainer = document.getElementById('choice-container');
+        const clickPrompt = document.getElementById('click-prompt');
+
+        // Character image placeholders
+        const portraits = {
+            judge: 'https://placehold.co/400x550/4B5563/FFFFFF?text=Judge',
+            prosecutor: 'https://placehold.co/400x550/881337/FFFFFF?text=Prosecutor',
+            defense: 'https://placehold.co/400x550/1E40AF/FFFFFF?text=Defense',
+            dr_he: 'https://placehold.co/400x550/3F3F46/FFFFFF?text=Dr.+He',
+            none: 'https://placehold.co/400x550/9CA3AF/FFFFFF?text=?'
+        };
+
+        // Game story data
+        let currentScene = 'start';
+        let playerPoints = {
+            logic: 0,
+            ethics: 0,
+            compassion: 0
+        };
+
+        const story = {
+            'start': {
+                name: "Narrator",
+                portrait: 'none',
+                text: "The courtroom is silent. You sit at the defense table next to your colleague, the Lead Defense Attorney. Dr. He Jiankui sits beside you, staring straight ahead.",
+                next: 'start_2'
+            },
+            'start_2': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "This court is in session. We are here to adjudicate the case of Dr. He Jiankui. The charges are grave: illegal medical practice and violation of all ethical norms.",
+                next: 'start_3'
+            },
+            'start_3': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "Mr. Prosecutor, your opening statement.",
+                next: 'prosecutor_1'
+            },
+            'prosecutor_1': {
+                name: "Prosecutor",
+                portrait: 'prosecutor',
+                text: "Thank you, Your Honor. This case is not just about one man's ambition; it's about the future of the human species. The defendant operated in secret, making *heritable* changes to our very blueprint.",
+                next: 'prosecutor_2'
+            },
+            'prosecutor_2': {
+                name: "Prosecutor",
+                portrait: 'prosecutor',
+                text: "He opened Pandora's Box to *enhancement*, threatening to violate our natural diversity. We will prove this was not just illegal, but unethical, arrogant, and dangerous.",
+                next: 'defense_1'
+            },
+            'defense_1': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "Ms. Defense Attorney, your statement.",
+                next: 'defense_2'
+            },
+            'defense_2': {
+                name: "Lead Defense Attorney",
+                portrait: 'defense',
+                text: "Your Honor, we do not dispute the facts. We dispute the *intent*. Dr. He's work aimed at a noble goal: the potential to eliminate latent genetic diseases.",
+                next: 'defense_3'
+            },
+            'defense_3': {
+                name: "Lead Defense Attorney",
+                portrait: 'defense',
+                text: "His research was a step—a flawed step, perhaps—toward curing diseases, not designing 'perfect' babies. We will argue this was scientific advancement, not a malicious act.",
+                next: 'prosecutor_arg_1'
+            },
+            'prosecutor_arg_1': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "Let's proceed to the core arguments. Mr. Prosecutor.",
+                next: 'prosecutor_arg_2'
+            },
+            'prosecutor_arg_2': {
+                name: "Prosecutor",
+                portrait: 'prosecutor',
+                text: "Your Honor, the societal harms are threefold. First, the religious and moral implications. For countless communities, life is sacred. The defendant's work is seen as 'playing the role of God.'",
+                next: 'player_choice_1_prompt'
+            },
+            'player_choice_1_prompt': {
+                name: "Lead Defense Attorney",
+                portrait: 'defense',
+                text: "(Whispering to you) How should we respond to this? This 'playing God' argument is tricky.",
+                choices: [
+                    { text: "Object! Law, not theology.", points: { logic: 1 }, next: 'choice_1_logic' },
+                    { text: "Let him talk. He sounds emotional.", points: { ethics: 1 }, next: 'choice_1_ethics' },
+                    { text: "Focus on the intent to cure.", points: { compassion: 1 }, next: 'choice_1_compassion' }
+                ]
+            },
+            'choice_1_logic': {
+                name: "Lead Defense Attorney",
+                portrait: 'defense',
+                text: "(Standing) Objection. The court cannot rule on theology. We are a nation of laws, not of one specific faith.",
+                next: 'judge_ruling_1'
+            },
+            'choice_1_ethics': {
+                name: "Narrator",
+                portrait: 'prosecutor',
+                text: "You motion for your colleague to wait. The Prosecutor continues, but his voice is rising, his argument becoming more philosophical than legal.",
+                next: 'judge_ruling_1_alt'
+            },
+            'choice_1_compassion': {
+                name: "Lead Defense Attorney",
+                portrait: 'defense',
+                text: "(Standing) Objection, Your Honor. The prosecution mischaracterizes the intent. This was about *curing*, an act of compassion, not a theological debate.",
+                next: 'judge_ruling_1'
+            },
+            'judge_ruling_1': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "Overruled. The court recognizes that profound public and ethical concerns are central to this case and the regulations the defendant allegedly broke. Continue, Prosecutor.",
+                next: 'prosecutor_arg_3'
+            },
+            'judge_ruling_1_alt': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "Mr. Prosecutor, please stick to the legal and regulatory statutes. While ethical concerns are relevant, this is a court of law. Continue.",
+                next: 'prosecutor_arg_3'
+            },
+            'prosecutor_arg_3': {
+                name: "Prosecutor",
+                portrait: 'prosecutor',
+                text: "Second, the impact on the disabled community. The very *language* this science uses—'correcting errors'—sends a message of social stigmatization. It implies that disabled lives are 'not worth living.'",
+                next: 'player_choice_2_prompt'
+            },
+            'player_choice_2_prompt': {
+                name: "Lead Defense Attorney",
+                portrait: 'defense',
+                text: "(Whispering) This is a powerful argument. What's our angle?",
+                choices: [
+                    { text: "Argue that preventing suffering IS compassion.", points: { compassion: 1 }, next: 'choice_2_compassion' },
+                    { text: "It helps, not erases, communities.", points: { logic: 1 }, next: 'choice_2_logic' },
+                    { text: "Stay silent. Wait for him to finish.", points: { ethics: 1 }, next: 'choice_2_ethics' }
+                ]
+            },
+            'choice_2_compassion': {
+                name: "Lead Defense Attorney",
+                portrait: 'defense',
+                text: "(Standing) My client was attempting to *prevent* suffering and disease. Is that not a form of compassion?",
+                next: 'prosecutor_arg_4'
+            },
+            'choice_2_logic': {
+                name: "Lead Defense Attorney",
+                portrait: 'defense',
+                text: "(Standing) Your Honor, this technology has the potential to *help* those with genetic disorders by offering cures, not to erase them as a community.",
+                next: 'prosecutor_arg_4'
+            },
+            'choice_2_ethics': {
+                name: "Narrator",
+                portrait: 'prosecutor',
+                text: "You let the prosecutor continue. The point hangs in the air, heavy and unanswered for now.",
+                next: 'prosecutor_arg_4'
+            },
+            'prosecutor_arg_4': {
+                name: "Prosecutor",
+                portrait: 'prosecutor',
+                text: "It is compassion wrapped in vanity, Your Honor! And finally, the socio-economic impact. This will create a 'genetic classism' where the wealthy can buy enhancements while the poor are left behind.",
+                next: 'judge_to_dr_he'
+            },
+            'judge_to_dr_he': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "I would like to hear from the defendant. Dr. He, you have heard these arguments. You knew the regulations. Why did you proceed?",
+                next: 'player_choice_3_prompt'
+            },
+            'player_choice_3_prompt': {
+                name: "Lead Defense Attorney",
+                portrait: 'defense',
+                text: "(Whispering) This is it. What should he focus on?",
+                choices: [
+                    { text: "Focus on his scientific intentions.", points: { logic: 1 }, next: 'choice_3_logic' },
+                    { text: "Apologize for the secrecy.", points: { ethics: 1 }, next: 'choice_3_ethics' },
+                    { text: "Emphasize his desire to help people.", points: { compassion: 1 }, next: 'choice_3_compassion' }
+                ]
+            },
+            'choice_3_logic': {
+                name: "Dr. He Jiankui",
+                portrait: 'dr_he',
+                text: "Your Honor... I am a scientist. We had a tool, CRISPR, that could change the world. I saw a chance to stop a terrible disease. To... to rewrite the fragile sequences. I just wanted to fix the error.",
+                next: 'judge_verdict_1'
+            },
+            'choice_3_ethics': {
+                name: "Dr. He Jiankui",
+                portrait: 'dr_he',
+                text: "Your Honor... I know that I broke the rules. I know my secrecy was wrong. But I truly believed it was the only way to move the science forward and help people. I am sorry for the deception.",
+                next: 'judge_verdict_1'
+            },
+            'choice_3_compassion': {
+                name: "Dr. He Jiankui",
+                portrait: 'dr_he',
+                text: "Your Honor... I am a scientist, but I am also human. I saw families suffering from genetic diseases. I just wanted to help them. I wanted to... to fix the pain. My belief was in helping humanity.",
+                next: 'judge_verdict_1'
+            },
+            'judge_verdict_1': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "(Leaning forward) You believed, Dr. He. You did not consult. You did not wait for governance. You alone decided what was 'better' for the human race.",
+                next: 'judge_verdict_2'
+            },
+            'judge_verdict_2': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "This court finds Dr. He Jiankui guilty of illegal medical practice and violating established regulations. The personal consequences for you, Dr. He, are severe.",
+                next: 'judge_verdict_3'
+            },
+            'judge_verdict_3': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "But this verdict is not enough. This case has exposed a critical failure in our global governance. We cannot allow human life to become a commodity.",
+                next: 'judge_verdict_4'
+            },
+            'judge_verdict_4': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "Therefore, this court calls for immediate, binding international governance. We must establish models that ensure equal access, treating essential gene therapies as public health goods, not luxuries.",
+                next: 'judge_verdict_5'
+            },
+            'judge_verdict_5': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "We must balance innovation with ethical responsibility, compassion, and a commitment to the common good. To do anything less would be a betrayal of the very humanity we claim to be 'improving.'",
+                next: 'end_1'
+            },
+            'end_1': {
+                name: "Judge",
+                portrait: 'judge',
+                text: "Court is adjourned.",
+                next: 'end_2'
+            },
+            'end_2': {
+                name: "Narrator",
+                portrait: 'none',
+                text: "The gavel falls. Dr. He slumps in his chair. Your lead attorney sighs and pats you on the shoulder.",
+                next: 'end_3'
+            },
+            'end_3': {
+                name: "Lead Defense Attorney",
+                portrait: 'defense',
+                text: "We lost the case... but thanks to your input, I think we made the court listen to the real issues. The debate is just beginning.",
+                next: 'end_final'
+            },
+            'end_final': {
+                name: "Narrator",
+                portrait: 'none',
+                text: "Your path was: Logic: " + playerPoints.logic + ", Ethics: " + playerPoints.ethics + ", Compassion: " + playerPoints.compassion + ". (Refresh to play again)",
+                end: true
+            }
+        };
+
+        // Function to render the current scene
+        function renderScene() {
+            let scene = story[currentScene];
+
+            // Update dialogue and character
+            characterName.textContent = scene.name;
+            dialogueText.textContent = scene.text;
+
+            // Update character portrait
+            if (portraits[scene.portrait]) {
+                characterPortrait.src = portraits[scene.portrait];
+                characterPortrait.classList.remove('opacity-0');
+            } else {
+                characterPortrait.classList.add('opacity-0');
+            }
+
+            // Clear old choices
+            choiceContainer.innerHTML = '';
+
+            if (scene.choices) {
+                // Show choices
+                choiceContainer.classList.remove('hidden');
+                clickPrompt.classList.add('hidden'); // Hide click prompt
+                scene.choices.forEach((choice, index) => {
+                    const button = document.createElement('button');
+                    button.textContent = choice.text;
+                    button.classList.add('choice-btn');
+                    button.onclick = () => handleChoice(choice);
+                    choiceContainer.appendChild(button);
+                });
+            } else {
+                // Hide choices
+                choiceContainer.classList.add('hidden');
+                clickPrompt.classList.remove('hidden'); // Show click prompt
+            }
+
+            // Update final score text if at the end
+            if (scene.end) {
+                dialogueText.textContent = "Your path was: Logic: " + playerPoints.logic + ", Ethics: " + playerPoints.ethics + ", Compassion: " + playerPoints.compassion + ". (Refresh to play again)";
+                clickPrompt.classList.add('hidden');
+            }
+        }
+
+        // Function to handle a player's choice
+        function handleChoice(choice) {
+            // Add points
+            if (choice.points) {
+                if(choice.points.logic) playerPoints.logic += choice.points.logic;
+                if(choice.points.ethics) playerPoints.ethics += choice.points.ethics;
+                if(choice.points.compassion) playerPoints.compassion += choice.points.compassion;
+            }
+            // Move to the next scene
+            currentScene = choice.next;
+            renderScene();
+        }
+
+        // Event listener for advancing dialogue
+        dialogueBox.addEventListener('click', () => {
+            let scene = story[currentScene];
+            // Only advance if there are no choices and it's not the end
+            if (!scene.choices && !scene.end) {
+                currentScene = scene.next;
+                renderScene();
+            }
+        });
+
+        // Initial render
+        renderScene();
+
+    </script>
+</body>
+</html>
