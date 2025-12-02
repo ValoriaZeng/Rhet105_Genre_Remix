@@ -1,0 +1,501 @@
+using UnityEngine;
+using UnityEngine.UI; // Required for basic UI elements like Image
+using TMPro; // Required for TextMeshPro elements (Text, InputField, Button)
+using System.Collections.Generic; // Required for Dictionary
+
+// --- Helper classes to organize story data ---
+
+// A struct to hold the points for each choice
+public struct PlayerPoints
+{
+    public int logic;
+    public int ethics;
+    public int compassion;
+}
+
+// A class to define what a choice button does
+public class ChoiceData
+{
+    public string text;
+    public string nextSceneKey;
+    public PlayerPoints points;
+}
+
+// A class to define all the data for a single scene
+public class SceneData
+{
+    public string characterName;
+    public string dialogueText;
+    public string portraitKey;
+    public string nextSceneKey; // Key for the next scene (if no choices)
+    public ChoiceData[] choices; // Array of choices (if any)
+}
+
+// --- The Main Dialogue Manager Script ---
+
+public class DialogueManager : MonoBehaviour
+{
+    [Header("Player State")]
+    private PlayerPoints playerPoints;
+    private string playerName;
+    private string currentSceneKey;
+
+    [Header("UI Panels")]
+    public GameObject nameEntryPanel;
+    public GameObject dialoguePanel;
+    public Transform choiceContainer; // The parent object for choice buttons (with a Vertical Layout Group)
+
+    [Header("Name Entry UI")]
+    public TMP_InputField playerNameInput;
+
+    [Header("Dialogue UI")]
+    public TextMeshProUGUI characterNameText;
+    public TextMeshProUGUI dialogueText;
+    public Image characterPortrait;
+
+    [Header("Prefabs & Assets")]
+    public GameObject choiceButtonPrefab; // A prefab for your choice buttons
+    public Sprite judgePortrait;
+    public Sprite prosecutorPortrait;
+    public Sprite defensePortrait;
+    public Sprite defendantPortrait; // Use a generic "defendant" portrait or a custom one
+    public Sprite narratorPortrait;
+
+    // Dictionaries to hold all story data and portraits
+    private Dictionary<string, SceneData> storyScenes;
+    private Dictionary<string, Sprite> portraitSprites;
+
+    void Start()
+    {
+        // Initialize dictionaries
+        storyScenes = new Dictionary<string, SceneData>();
+        portraitSprites = new Dictionary<string, Sprite>();
+
+        // Load data
+        InitializePortraits();
+        InitializeStory();
+
+        // Set up initial game state
+        playerPoints = new PlayerPoints { logic = 0, ethics = 0, compassion = 0 };
+        
+        // Show name entry screen first
+        nameEntryPanel.SetActive(true);
+        dialoguePanel.SetActive(false);
+        choiceContainer.gameObject.SetActive(false);
+    }
+
+    // Called by the "Submit" button on the name entry panel
+    public void SubmitName()
+    {
+        playerName = playerNameInput.text;
+        if (string.IsNullOrEmpty(playerName))
+        {
+            playerName = "Dr. Evans"; // Default name if none is entered
+        }
+        else
+        {
+            playerName = "Dr. " + playerName; // Add the "Dr." prefix
+        }
+
+        // Hide name panel, show dialogue panel, and start the story
+        nameEntryPanel.SetActive(false);
+        dialoguePanel.SetActive(true);
+
+        currentSceneKey = "start";
+        RenderScene();
+    }
+
+    // Load portrait sprites into the dictionary
+    void InitializePortraits()
+    {
+        portraitSprites["judge"] = judgePortrait;
+        portraitSprites["prosecutor"] = prosecutorPortrait;
+        portraitSprites["defense"] = defensePortrait;
+        portraitSprites["defendant"] = defendantPortrait;
+        portraitSprites["none"] = narratorPortrait; // Use a narrator/blank portrait
+    }
+
+    // This is where the entire story tree is defined
+    void InitializeStory()
+    {
+        // We use {PLAYER_NAME} as a placeholder that will be replaced.
+        storyScenes["start"] = new SceneData
+        {
+            characterName = "Narrator",
+            portraitKey = "none",
+            dialogueText = "The courtroom is silent. You sit at the defense table next to your colleague, the Lead Defense Attorney. {PLAYER_NAME} sits beside you, staring straight ahead.",
+            nextSceneKey = "start_2"
+        };
+
+        storyScenes["start_2"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "This court is in session. We are here to adjudicate the case of {PLAYER_NAME}. The charges are grave: illegal medical practice and violation of all ethical norms.",
+            nextSceneKey = "start_3"
+        };
+        
+        storyScenes["start_3"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "Mr. Prosecutor, your opening statement.",
+            nextSceneKey = "prosecutor_1"
+        };
+
+        storyScenes["prosecutor_1"] = new SceneData
+        {
+            characterName = "Prosecutor",
+            portraitKey = "prosecutor",
+            dialogueText = "Thank you, Your Honor. This case is not just about one person's ambition; it's about the future of the human species. The defendant operated in secret, making *heritable* changes to our very blueprint.",
+            nextSceneKey = "prosecutor_2"
+        };
+
+        storyScenes["prosecutor_2"] = new SceneData
+        {
+            characterName = "Prosecutor",
+            portraitKey = "prosecutor",
+            dialogueText = "They opened Pandora's Box to *enhancement*, threatening to violate our natural diversity. We will prove this was not just illegal, but unethical, arrogant, and dangerous.",
+            nextSceneKey = "defense_1"
+        };
+
+        storyScenes["defense_1"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "Ms. Defense Attorney, your statement.",
+            nextSceneKey = "defense_2"
+        };
+
+        storyScenes["defense_2"] = new SceneData
+        {
+            characterName = "Lead Defense Attorney",
+            portraitKey = "defense",
+            dialogueText = "Your Honor, we do not dispute the facts. We dispute the *intent*. {PLAYER_NAME}'s work aimed at a noble goal: the potential to eliminate latent genetic diseases.",
+            nextSceneKey = "defense_3"
+        };
+
+        storyScenes["defense_3"] = new SceneData
+        {
+            characterName = "Lead Defense Attorney",
+            portraitKey = "defense",
+            dialogueText = "This research was a step—a flawed step, perhaps—toward curing diseases, not designing 'perfect' babies. We will argue this was scientific advancement, not a malicious act.",
+            nextSceneKey = "prosecutor_arg_1"
+        };
+
+        storyScenes["prosecutor_arg_1"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "Let's proceed to the core arguments. Mr. Prosecutor.",
+            nextSceneKey = "prosecutor_arg_2"
+        };
+
+        storyScenes["prosecutor_arg_2"] = new SceneData
+        {
+            characterName = "Prosecutor",
+            portraitKey = "prosecutor",
+            dialogueText = "Your Honor, the societal harms are threefold. First, the religious and moral implications. For countless communities, life is sacred. The defendant's work is seen as 'playing the role of God.'",
+            nextSceneKey = "player_choice_1_prompt"
+        };
+
+        storyScenes["player_choice_1_prompt"] = new SceneData
+        {
+            characterName = "Lead Defense Attorney",
+            portraitKey = "defense",
+            dialogueText = "(Whispering to you) How should we respond to this? This 'playing God' argument is tricky.",
+            choices = new ChoiceData[]
+            {
+                new ChoiceData { text = "Object! Law, not theology.", points = new PlayerPoints { logic = 1 }, nextSceneKey = "choice_1_logic" },
+                new ChoiceData { text = "Let him talk. He sounds emotional.", points = new PlayerPoints { ethics = 1 }, nextSceneKey = "choice_1_ethics" },
+                new ChoiceData { text = "Focus on the intent to cure.", points = new PlayerPoints { compassion = 1 }, nextSceneKey = "choice_1_compassion" }
+            }
+        };
+
+        storyScenes["choice_1_logic"] = new SceneData
+        {
+            characterName = "Lead Defense Attorney",
+            portraitKey = "defense",
+            dialogueText = "(Standing) Objection. The court cannot rule on theology. We are a nation of laws, not of one specific faith.",
+            nextSceneKey = "judge_ruling_1"
+        };
+
+        storyScenes["choice_1_ethics"] = new SceneData
+        {
+            characterName = "Narrator",
+            portraitKey = "prosecutor",
+            dialogueText = "You motion for your colleague to wait. The Prosecutor continues, but his voice is rising, his argument becoming more philosophical than legal.",
+            nextSceneKey = "judge_ruling_1_alt"
+        };
+
+        storyScenes["choice_1_compassion"] = new SceneData
+        {
+            characterName = "Lead Defense Attorney",
+            portraitKey = "defense",
+            dialogueText = "(Standing) Objection, Your Honor. The prosecution mischaracterizes the intent. This was about *curing*, an act of compassion, not a theological debate.",
+            nextSceneKey = "judge_ruling_1"
+        };
+
+        storyScenes["judge_ruling_1"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "Overruled. The court recognizes that profound public and ethical concerns are central to this case and the regulations the defendant allegedly broke. Continue, Prosecutor.",
+            nextSceneKey = "prosecutor_arg_3"
+        };
+
+        storyScenes["judge_ruling_1_alt"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "Mr. Prosecutor, please stick to the legal and regulatory statutes. While ethical concerns are relevant, this is a court of law. Continue.",
+            nextSceneKey = "prosecutor_arg_3"
+        };
+
+        storyScenes["prosecutor_arg_3"] = new SceneData
+        {
+            characterName = "Prosecutor",
+            portraitKey = "prosecutor",
+            dialogueText = "Second, the impact on the disabled community. The very *language* this science uses—'correcting errors'—sends a message of social stigmatization. It implies that disabled lives are 'not worth living.'",
+            nextSceneKey = "player_choice_2_prompt"
+        };
+
+        storyScenes["player_choice_2_prompt"] = new SceneData
+        {
+            characterName = "Lead Defense Attorney",
+            portraitKey = "defense",
+            dialogueText = "(Whispering) This is a powerful argument. What's our angle?",
+            choices = new ChoiceData[]
+            {
+                new ChoiceData { text = "Argue that preventing suffering IS compassion.", points = new PlayerPoints { compassion = 1 }, nextSceneKey = "choice_2_compassion" },
+                new ChoiceData { text = "It helps, not erases, communities.", points = new PlayerPoints { logic = 1 }, nextSceneKey = "choice_2_logic" },
+                new ChoiceData { text = "Stay silent. Wait for him to finish.", points = new PlayerPoints { ethics = 1 }, nextSceneKey = "choice_2_ethics" }
+            }
+        };
+
+        storyScenes["choice_2_compassion"] = new SceneData
+        {
+            characterName = "Lead Defense Attorney",
+            portraitKey = "defense",
+            dialogueText = "(Standing) My client was attempting to *prevent* suffering and disease. Is that not a form of compassion?",
+            nextSceneKey = "prosecutor_arg_4"
+        };
+
+        storyScenes["choice_2_logic"] = new SceneData
+        {
+            characterName = "Lead Defense Attorney",
+            portraitKey = "defense",
+            dialogueText = "(Standing) Your Honor, this technology has the potential to *help* those with genetic disorders by offering cures, not to erase them as a community.",
+            nextSceneKey = "prosecutor_arg_4"
+        };
+
+        storyScenes["choice_2_ethics"] = new SceneData
+        {
+            characterName = "Narrator",
+            portraitKey = "prosecutor",
+            dialogueText = "You let the prosecutor continue. The point hangs in the air, heavy and unanswered for now.",
+            nextSceneKey = "prosecutor_arg_4"
+        };
+
+        storyScenes["prosecutor_arg_4"] = new SceneData
+        {
+            characterName = "Prosecutor",
+            portraitKey = "prosecutor",
+            dialogueText = "It is compassion wrapped in vanity, Your Honor! And finally, the socio-economic impact. This will create a 'genetic classism' where the wealthy can buy enhancements while the poor are left behind.",
+            nextSceneKey = "judge_to_defendant"
+        };
+
+        storyScenes["judge_to_defendant"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "I would like to hear from the defendant. {PLAYER_NAME}, you have heard these arguments. You knew the regulations. Why did you proceed?",
+            nextSceneKey = "player_choice_3_prompt"
+        };
+
+        storyScenes["player_choice_3_prompt"] = new SceneData
+        {
+            characterName = "Lead Defense Attorney",
+            portraitKey = "defense",
+            dialogueText = "(Whispering) This is it. What should they focus on?",
+            choices = new ChoiceData[]
+            {
+                new ChoiceData { text = "Focus on the scientific intentions.", points = new PlayerPoints { logic = 1 }, nextSceneKey = "choice_3_logic" },
+                new ChoiceData { text = "Apologize for the secrecy.", points = new PlayerPoints { ethics = 1 }, nextSceneKey = "choice_3_ethics" },
+                new ChoiceData { text = "Emphasize the desire to help people.", points = new PlayerPoints { compassion = 1 }, nextSceneKey = "choice_3_compassion" }
+            }
+        };
+
+        storyScenes["choice_3_logic"] = new SceneData
+        {
+            characterName = "{PLAYER_NAME}", // The defendant is now the player
+            portraitKey = "defendant",
+            dialogueText = "Your Honor... I am a scientist. We had a tool, CRISPR, that could change the world. I saw a chance to stop a terrible disease. To... to rewrite the fragile sequences. I just wanted to fix the error.",
+            nextSceneKey = "judge_verdict_1"
+        };
+
+        storyScenes["choice_3_ethics"] = new SceneData
+        {
+            characterName = "{PLAYER_NAME}",
+            portraitKey = "defendant",
+            dialogueText = "Your Honor... I know that I broke the rules. I know my secrecy was wrong. But I truly believed it was the only way to move the science forward and help people. I am sorry for the deception.",
+            nextSceneKey = "judge_verdict_1"
+        };
+
+        storyScenes["choice_3_compassion"] = new SceneData
+        {
+            characterName = "{PLAYER_NAME}",
+            portraitKey = "defendant",
+            dialogueText = "Your Honor... I am a scientist, but I am also human. I saw families suffering from genetic diseases. I just wanted to help them. I wanted to... to fix the pain. My belief was in helping humanity.",
+            nextSceneKey = "judge_verdict_1"
+        };
+
+        storyScenes["judge_verdict_1"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "(Leaning forward) You believed, {PLAYER_NAME}. You did not consult. You did not wait for governance. You alone decided what was 'better' for the human race.",
+            nextSceneKey = "judge_verdict_2"
+        };
+
+        storyScenes["judge_verdict_2"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "This court finds {PLAYER_NAME} guilty of illegal medical practice and violating established regulations. The personal consequences for you are severe.",
+            nextSceneKey = "judge_verdict_3"
+        };
+
+        storyScenes["judge_verdict_3"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "But this verdict is not enough. This case has exposed a critical failure in our global governance. We cannot allow human life to become a commodity.",
+            nextSceneKey = "judge_verdict_4"
+        };
+
+        storyScenes["judge_verdict_4"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "Therefore, this court calls for immediate, binding international governance. We must establish models that ensure equal access, treating essential gene therapies as public health goods, not luxuries.",
+            nextSceneKey = "judge_verdict_5"
+        };
+
+        storyScenes["judge_verdict_5"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "We must balance innovation with ethical responsibility, compassion, and a commitment to the common good. To do anything less would be a betrayal of the very humanity we claim to be 'improving.'",
+            nextSceneKey = "end_1"
+        };
+
+        storyScenes["end_1"] = new SceneData
+        {
+            characterName = "Judge",
+            portraitKey = "judge",
+            dialogueText = "Court is adjourned.",
+            nextSceneKey = "end_2"
+        };
+
+        storyScenes["end_2"] = new SceneData
+        {
+            characterName = "Narrator",
+            portraitKey = "none",
+            dialogueText = "The gavel falls. {PLAYER_NAME} slumps in the chair. Your lead attorney sighs and pats you on the shoulder.",
+            nextSceneKey = "end_3"
+        };
+
+        storyScenes["end_3"] = new SceneData
+        {
+            characterName = "Lead Defense Attorney",
+            portraitKey = "defense",
+            dialogueText = "We lost the case... but thanks to your input, I think we made the court listen to the real issues. The debate is just beginning.",
+            nextSceneKey = "end_final"
+        };
+
+        storyScenes["end_final"] = new SceneData
+        {
+            characterName = "Narrator",
+            portraitKey = "none",
+            dialogueText = "Your final path: Logic: {LOGIC}, Ethics: {ETHICS}, Compassion: {COMPASSION}. (Game Over)",
+            nextSceneKey = null // No next scene
+        };
+    }
+
+    // This function updates the UI based on the current scene
+    void RenderScene()
+    {
+        SceneData scene = storyScenes[currentSceneKey];
+
+        // Replace placeholders with actual values
+        string finalDialogue = scene.dialogueText.Replace("{PLAYER_NAME}", playerName);
+        string finalCharName = scene.characterName.Replace("{PLAYER_NAME}", playerName);
+
+        if (currentSceneKey == "end_final")
+        {
+            finalDialogue = finalDialogue.Replace("{LOGIC}", playerPoints.logic.ToString());
+            finalDialogue = finalDialogue.Replace("{ETHICS}", playerPoints.ethics.ToString());
+            finalDialogue = finalDialogue.Replace("{COMPASSION}", playerPoints.compassion.ToString());
+        }
+
+        // Update UI elements
+        characterNameText.text = finalCharName;
+        dialogueText.text = finalDialogue;
+        characterPortrait.sprite = portraitSprites[scene.portraitKey];
+        characterPortrait.gameObject.SetActive(scene.portraitKey != "none");
+
+        // Clear old choice buttons
+        foreach (Transform child in choiceContainer)
+        {
+            Destroy(child.gameObject);
+        }
+
+        // Check if there are choices
+        if (scene.choices != null && scene.choices.Length > 0)
+        {
+            choiceContainer.gameObject.SetActive(true);
+
+            // Create new choice buttons
+            foreach (ChoiceData choice in scene.choices)
+            {
+                GameObject buttonGO = Instantiate(choiceButtonPrefab, choiceContainer);
+                buttonGO.GetComponentInChildren<TextMeshProUGUI>().text = choice.text;
+                
+                // Add a listener to the button to call HandleChoice when clicked
+                Button button = buttonGO.GetComponent<Button>();
+                button.onClick.AddListener(() => HandleChoice(choice));
+            }
+        }
+        else
+        {
+            choiceContainer.gameObject.SetActive(false);
+        }
+    }
+
+    // Called when a choice button is clicked
+    void HandleChoice(ChoiceData choice)
+    {
+        // Add points
+        playerPoints.logic += choice.points.logic;
+        playerPoints.ethics += choice.points.ethics;
+        playerPoints.compassion += choice.points.compassion;
+
+        // Go to the next scene
+        currentSceneKey = choice.nextSceneKey;
+        RenderScene();
+    }
+
+    // Called by the EventTrigger on the DialoguePanel
+    public void OnDialogueBoxClick()
+    {
+        SceneData scene = storyScenes[currentSceneKey];
+
+        // Only advance if there are no choices and it's not the end
+        if ((scene.choices == null || scene.choices.Length == 0) && scene.nextSceneKey != null)
+        {
+            currentSceneKey = scene.nextSceneKey;
+            RenderScene();
+        }
+    }
+}
