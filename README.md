@@ -14,7 +14,7 @@ This game is built with the Unity Engine and is designed to run smoothly on most
 - Memory: 4 GB RAM
 ## Installation and Launch
 ### 🚀 Windows (Suggested)
-1. Downlaod the game file ```DesigningFuture_WinVer.zip```  
+1. Downlaod the game file ```DesigningFuture.zip```  
 2. Unzip the file  
 3. Run the main executable file ```DesignFuture.exe```
 ### 🍎MacOS
