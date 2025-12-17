@@ -22,7 +22,7 @@ This game is built with the Unity Engine and is designed to run smoothly on most
 2. Unzip the file
 3. Run the ```DesigningFuture_Mac_Version.app```
 > [!Warning]
-> If the game was built on a Windows computer, macOS may remove the necessary permissions needed to run the application. If you see the error "The application 'TheCrossroadsChronicle.app' can't be opened," follow these steps to fix the permissions:
+> If the game was built on a Windows computer, macOS may remove the necessary permissions needed to run the application. If you see the error "The application 'DesigningFuture.app' can't be opened," follow these steps to fix the permissions:
 > 1. **Open termial**: Go to **Applications** > **Utilities** > **Terminal**
 2. **Navigate to the File**: Type the following command and press Enter (assuming the game is in your Downloads folder):  
 ```cd ~/Downloads```
